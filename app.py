@@ -35,4 +35,14 @@ def step(action: Action):
             "info": {}
         }
 
-@app.get("/state")\ndef state():\n    return current_state\n\n@app.get("/health")\ndef health():\n    return {\"status\": \"healthy\"}\n\n@app.get("/")\ndef root():\n    return {\"OpenEnv\": \"School Operations Environment\"}
+@app.get("/state")
+def state():
+    return current_state
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
+@app.get("/")
+def root():
+    return {"OpenEnv": "School Operations Environment"}
