@@ -1,0 +1,256 @@
+name: "AI-Powered School Operations Evaluation Environment"
+version: "1.0.0"
+description: |
+  An OpenEnv-compliant environment for evaluating AI agents on real-world school 
+  operations tasks including email triage, timetable scheduling, and student support.
+  
+author: "Raccoon AI Hackathon"
+repository: "https://huggingface.co/spaces/raccoon-ai/school-operations-env"
+
+# OpenEnv specification compliance
+openenv_version: "1.0"
+
+# Environment metadata
+metadata:
+  domain: "school_operations"
+  real_world_application: true
+  deterministic_graders: true
+  difficulty_levels: ["easy", "medium", "hard"]
+  
+# Task definitions
+tasks:
+  - id: "email_classification"
+    name: "Email Classification"
+    description: "Classify incoming student/parent emails into appropriate categories"
+    difficulty: "easy"
+    observation_type: "EmailData"
+    action_type: "EmailAction"
+    grader: "EmailGrader"
+    categories:
+      - "admission"
+      - "academic"
+      - "behavioral"
+      - "health"
+      - "extracurricular"
+      - "other"
+    reward_range: [0.0, 1.0]
+    evaluation_metric: "exact_match"
+    
+  - id: "timetable_scheduling"
+    name: "Timetable Scheduling"
+    description: "Schedule classes across a week while respecting constraints and optimizing room usage"
+    difficulty: "medium"
+    observation_type: "List[ScheduleConstraint]"
+    action_type: "ScheduleAction"
+    grader: "ScheduleGrader"
+    constraints:
+      - "no_time_clashes"
+      - "room_availability"
+      - "duration_match"
+      - "teacher_availability"
+    reward_range: [0.0, 1.0]
+    evaluation_metrics:
+      - "clash_free_schedule"
+      - "duration_compliance"
+      - "preference_satisfaction"
+    
+  - id: "student_support"
+    name: "Student Support Response"
+    description: "Generate appropriate support responses to student queries across academic, behavioral, and health domains"
+    difficulty: "hard"
+    observation_type: "StudentQuery"
+    action_type: "SupportResponse"
+    grader: "StudentSupportGrader"
+    evaluation_criteria:
+      - "keyword_coverage"
+      - "correctness"
+      - "tone_appropriateness"
+      - "action_items"
+    reward_range: [0.0, 1.0]
+    
+# Observation space
+observation_space:
+  task_type:
+    type: "Enum"
+    values: ["email_classification", "timetable_scheduling", "student_support"]
+  difficulty:
+    type: "Enum"
+    values: ["easy", "medium", "hard"]
+  step_number:
+    type: "int"
+    range: [0, null]
+  max_steps:
+    type: "int"
+    range: [1, null]
+  email_data:
+    type: "EmailData | None"
+    fields:
+      - subject: "str"
+      - body: "str"
+      - sender: "str"
+  schedule_constraints:
+    type: "List[ScheduleConstraint] | None"
+    fields:
+      - class_name: "str"
+      - teacher: "str"
+      - duration_minutes: "int"
+      - students: "List[str]"
+      - preferred_times: "List[str] | None"
+  student_query:
+    type: "StudentQuery | None"
+    fields:
+      - student_name: "str"
+      - issue_type: "str"
+      - query: "str"
+      - context: "str | None"
+  timestamp:
+    type: "ISO8601 string"
+  episode_id:
+    type: "UUID string"
+
+# Action space
+action_space:
+  task_type:
+    type: "Enum"
+    values: ["email_classification", "timetable_scheduling", "student_support"]
+  email_action:
+    type: "EmailAction | None"
+    fields:
+      - category: "str (one of: admission, academic, behavioral, health, extracurricular, other)"
+  schedule_action:
+    type: "ScheduleAction | None"
+    fields:
+      - schedule: "List[ScheduleSlot]"
+        slot_fields:
+          - class_name: "str"
+          - day: "str (Monday-Friday)"
+          - start_time: "str (HH:MM)"
+          - end_time: "str (HH:MM)"
+          - location: "str"
+  support_action:
+    type: "SupportResponse | None"
+    fields:
+      - response: "str"
+      - action_items: "List[str]"
+      - urgency: "str (low, medium, high)"
+
+# Reward space
+reward_space:
+  total_reward:
+    type: "float"
+    range: [-1.0, 1.0]
+    description: "Sum of task score, efficiency bonus, partial credit, and penalties"
+  breakdown:
+    type: "RewardBreakdown"
+    components:
+      - task_score: "float in [0.0, 1.0] - main grader score"
+      - efficiency_bonus: "float in [-0.1, 0.1] - rewards quick solutions"
+      - partial_credit: "float in [0.0, 0.2] - incremental progress"
+      - penalty: "float in [-1.0, 0.0] - violations and inefficiencies"
+  feedback:
+    type: "string"
+    description: "Human-readable grader feedback"
+  is_terminal:
+    type: "bool"
+    description: "Whether episode has completed"
+
+# Grading methodology
+grading:
+  deterministic: true
+  reproducible: true
+  email_classification:
+    method: "exact_match"
+    scoring: "1.0 if category matches ground truth, 0.0 otherwise"
+    
+  timetable_scheduling:
+    method: "multi_criteria"
+    criteria:
+      - name: "no_time_clashes"
+        weight: 0.5
+        description: "Penalizes overlapping classes in same location"
+      - name: "duration_compliance"
+        weight: 0.35
+        description: "Checks if scheduled durations match constraints"
+      - name: "preference_satisfaction"
+        weight: 0.15
+        description: "Bonus for respecting preferred time slots"
+    
+  student_support:
+    method: "multi_criteria"
+    criteria:
+      - name: "keyword_coverage"
+        weight: 0.25
+        description: "Checks if response includes issue-relevant keywords"
+      - name: "correctness"
+        weight: 0.40
+        description: "Evaluates if response appropriately addresses the query"
+      - name: "tone"
+        weight: 0.25
+        description: "Ensures supportive, non-judgmental tone"
+      - name: "action_items"
+        weight: 0.10
+        description: "Bonus for including concrete next steps"
+
+# Environment interface
+interface:
+  methods:
+    - name: "reset"
+      description: "Initialize episode and return initial observation"
+      returns: "Observation"
+      
+    - name: "step"
+      description: "Execute action and return (observation, reward, done, info)"
+      params:
+        - name: "action"
+          type: "Action"
+      returns: "Tuple[Observation, Reward, bool, Dict]"
+      
+    - name: "state"
+      description: "Return current environment state"
+      returns: "EnvironmentState"
+
+# Episode configuration
+episodes:
+  max_steps_easy: 5
+  max_steps_medium: 10
+  max_steps_hard: 15
+  episode_termination: "max_steps_reached OR high_quality_solution"
+  high_quality_threshold: 0.8
+
+# Validation and testing
+validation:
+  openenv_compliant: true
+  type_checking: "strict (Pydantic v2)"
+  reproducibility: "seeded random generation"
+  baseline_available: true
+  dockerfile_provided: true
+  hf_spaces_compatible: true
+
+# Deployment
+deployment:
+  platform: "huggingface_spaces"
+  containerized: true
+  dockerfile: "Dockerfile"
+  python_version: "3.10+"
+  required_packages:
+    - "pydantic>=2.5.0"
+    - "openai>=1.3.5"
+    - "python-dotenv>=1.0.0"
+    - "pyyaml>=6.0.1"
+    - "numpy>=1.24.3"
+
+# Benchmarking
+benchmarking:
+  baseline_model: "GPT-4"
+  baseline_scores:
+    email_classification:
+      score: 0.95
+      description: "Excellent keyword-based classification"
+    timetable_scheduling:
+      score: 0.87
+      description: "Minor constraint violations"
+    student_support:
+      score: 0.82
+      description: "Good coverage, tone mostly appropriate"
+  evaluation_runs: 10
+  reproducibility_seed: 42
