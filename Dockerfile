@@ -29,5 +29,5 @@ ENV HF_HOME=/app/.cache
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "from environment import SchoolOperationsEnv; env = SchoolOperationsEnv(); env.reset()" || exit 1
 
-# Default command - run Gradio app
-CMD ["python", "app.py"]
+# Run FastAPI server with uvicorn
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
